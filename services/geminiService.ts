@@ -1,14 +1,19 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { FeedbackItem, ReviewResponse } from '../types';
 
-const API_KEY = process.env.API_KEY;
+let ai: GoogleGenAI | null = null;
 
-if (!API_KEY) {
-    throw new Error("API_KEY environment variable not set.");
-}
-
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+const getAiClient = (): GoogleGenAI => {
+    if (ai) {
+        return ai;
+    }
+    const API_KEY = process.env.API_KEY;
+    if (!API_KEY) {
+        throw new Error("Gemini API key is not configured. Please set the API_KEY environment variable.");
+    }
+    ai = new GoogleGenAI({ apiKey: API_KEY });
+    return ai;
+};
 
 const systemInstruction = `You are an expert code reviewer AI. Your task is to analyze the provided code snippet and return structured feedback. 
 - Identify potential bugs, performance issues, style violations, and suggest improvements. 
@@ -51,7 +56,8 @@ const responseSchema = {
 
 export const reviewCode = async (code: string): Promise<FeedbackItem[]> => {
     try {
-        const response = await ai.models.generateContent({
+        const client = getAiClient();
+        const response = await client.models.generateContent({
             model: "gemini-2.5-flash",
             contents: code,
             config: {
@@ -67,6 +73,9 @@ export const reviewCode = async (code: string): Promise<FeedbackItem[]> => {
         return parsedResponse.feedback || [];
     } catch (error) {
         console.error("Error reviewing code:", error);
+        if (error instanceof Error) {
+            throw new Error(error.message);
+        }
         throw new Error("Failed to get review from Gemini. Please check the console for more details.");
     }
 };
